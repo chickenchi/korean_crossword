@@ -22,35 +22,33 @@ const grid: (string | null)[][] = Array(8)
   .fill(null)
   .map(() => Array(8).fill(null));
 
+// 열 제한 배열
+const colRestrictGrid: boolean[][] = Array(8)
+  .fill(false)
+  .map(() => Array(8).fill(false));
+
+for (let i = 0; i < 8; i++) {
+  colRestrictGrid[i][7] = true;
+}
+
+// 행 제한 배열
+const rowRestrictGrid: boolean[][] = Array(8)
+  .fill(false)
+  .map(() => Array(8).fill(false));
+
+for (let i = 0; i < 8; i++) {
+  rowRestrictGrid[7][i] = true;
+}
+
 export const create_cross = () => {
   for (let i = 0; i <= 10; i++) {
-    // 초기일 경우 제약이 없으므로 그냥 생성
-    if (i == 0) {
-      createRandomTile(i, sharedList);
-      continue;
-    } else {
-      // 기존 셀 상태 얕은 복사(숫자라서 깊은 복사 효과)
-      /** 가로와 세로를 체크를 위한 임시 연결 리스트 */
-      let list = LinkedList.fromArray(
-        sharedList.toArray().map((n) => n.getValue())
-      );
-
-      createRandomTile(i, list);
-    }
+    createRandomTile(i);
+    if (i > 0) restrictCrossPoint();
   }
-
-  restrictCrossPoint();
-
   showStatus();
 
   return;
 };
-
-/*
-ㅁㅁㅁ
-ㅁxㅁ
-ㅁㅁㅁ
-*/
 
 const isEmptyCell = (r: number, c: number): boolean => {
   return r >= 0 && r < 8 && c >= 0 && c < 8 && grid[r][c] == null;
@@ -77,68 +75,143 @@ export const restrictCrossPoint = () => {
           : false;
 
       if (downRight || upRight || upLeft || downLeft) {
-        sharedList.removeAt(i * 8 + j);
+        sharedList.removeEach((node) => node.getValue() === i * 8 + j);
       }
     }
   return;
 };
 
-const createRandomTile = (index: number, list: LinkedList<number>) => {
-  // (가능한 최대 길이) - (제한된 셀의 개수) = 받아온 리스트의 크기
-  const randomValue = list.toArray().map((n) => n.getValue())[
-    Math.floor(Math.random() * list.count())
-  ];
+const createRandomTile = (index: number) => {
+  let randomValue: number;
 
   // 1차원을 2차원으로 변경
   // 행
-  const row = Math.floor(randomValue / 8);
+  let row: number;
   // 열
-  const col = randomValue % 8;
+  let col: number;
 
   // 방향 설정
   let dir: "horizontal" | "vertical";
 
-  // 가로 끝 -> 세로만 가능
-  if (col == 7) {
-    dir = "vertical";
-  }
-  // 세로 끝 -> 가로만 가능
-  else if (row == 7) {
-    dir = "horizontal";
-  }
-  // 나머지 -> 랜덤
-  else {
-    dir = Math.random() < 0.5 ? "horizontal" : "vertical";
+  // 단어 길이
+  let len: number;
+
+  while (true) {
+    // (가능한 최대 길이) - (제한된 셀의 개수) = 받아온 리스트의 크기
+    randomValue = sharedList.toArray().map((n) => n.getValue())[
+      Math.floor(Math.random() * sharedList.count())
+    ];
+
+    row = Math.floor(randomValue / 8);
+    col = randomValue % 8;
+
+    if (colRestrictGrid[row][col] && rowRestrictGrid[row][col]) {
+      sharedList.removeEach((node) => node.getValue() === row * 8 + col);
+      continue;
+    }
+
+    // 가로 끝 -> 세로만 가능
+    if (col == 7 || colRestrictGrid[row][col]) {
+      dir = "vertical";
+    }
+    // 세로 끝 -> 가로만 가능
+    else if (row == 7 || rowRestrictGrid[row][col]) {
+      dir = "horizontal";
+    }
+    // 나머지 -> 랜덤
+    else {
+      dir = Math.random() < 0.5 ? "horizontal" : "vertical";
+    }
+
+    // 2~6 중의 수이지만(작성은 5까지만 나오지만 겹치는 경우 6자가 나옴) 오버플로 방지
+    // 세로
+    if (dir == "vertical") {
+      // rowRestrict or notSharedList
+      let limit: number;
+
+      for (limit = 1; limit <= Math.min(7 - row, 4); limit++) {
+        if (row + limit >= 8 || rowRestrictGrid[row + limit][col]) {
+          break;
+        }
+      }
+
+      limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
+
+      if (limit < 1) {
+        sharedList.removeEach((node) => node.getValue() === row * 8 + col);
+        continue;
+      }
+
+      len = Math.floor(Math.random() * limit) + 2;
+    } else {
+      // colRestrict or notSharedList
+      let limit: number;
+
+      for (limit = 1; limit <= Math.min(7 - col, 4); limit++) {
+        if (col + limit >= 8 || colRestrictGrid[row][col + limit]) {
+          break;
+        }
+      }
+
+      limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
+
+      if (limit < 1) {
+        sharedList.removeEach((node) => node.getValue() === row * 8 + col);
+        continue;
+      }
+
+      len = Math.floor(Math.random() * limit) + 2;
+    }
+
+    break;
   }
 
-  let len;
-
-  // 2~6 중의 수지만 오버플로 방지
-  if (dir == "vertical")
-    len = Math.floor(Math.random() * Math.min(7 - row, 5)) + 2;
-  else len = Math.floor(Math.random() * Math.min(7 - col, 5)) + 2;
-
-  // 등록
+  // 등록; 가로 혹은 세로 제약 추가
   for (let i = 0; i < len; i++) {
-    if (dir == "vertical") grid[row + i][col] = `tile-${index}`;
-    else grid[row][col + i] = `tile-${index}`;
+    if (dir == "vertical") {
+      grid[row + i][col] = `tile-${index}`;
+
+      for (let j = -1; j <= 1; j++) {
+        if (col + j >= 0 && col + j < 8)
+          rowRestrictGrid[row + i][col + j] = true;
+      }
+    } else {
+      grid[row][col + i] = `tile-${index}`;
+
+      for (let j = -1; j <= 1; j++) {
+        if (row + j >= 0 && row + j < 8)
+          colRestrictGrid[row + j][col + i] = true;
+      }
+    }
   }
 
   // 공통 제약 셀 제거
   // 세로
   if (dir == "vertical") {
     if (row + len <= 7) {
-      sharedList.removeAt((row + len) * 8 + col);
+      sharedList.removeEach(
+        (node) => node.getValue() === (row + len) * 8 + col
+      );
+      rowRestrictGrid[row + len][col] = true;
+      colRestrictGrid[row + len][col] = true;
     }
     if (row - 1 >= 0) {
-      sharedList.removeAt((row - 1) * 8 + col);
+      sharedList.removeEach((node) => node.getValue() === (row - 1) * 8 + col);
+      rowRestrictGrid[row - 1][col] = true;
+      colRestrictGrid[row - 1][col] = true;
     }
   } else {
     if (col + len <= 7) {
-      sharedList.removeAt(row * 8 + (col + len));
+      sharedList.removeEach(
+        (node) => node.getValue() === row * 8 + (col + len)
+      );
+      rowRestrictGrid[row][col + len] = true;
+      colRestrictGrid[row][col + len] = true;
     }
     if (col - 1 >= 0) {
-      sharedList.removeAt(row * 8 + (col - 1));
+      sharedList.removeEach((node) => node.getValue() === row * 8 + (col - 1));
+      rowRestrictGrid[row][col - 1] = true;
+      colRestrictGrid[row][col - 1] = true;
     }
   }
 
@@ -147,19 +220,42 @@ const createRandomTile = (index: number, list: LinkedList<number>) => {
 };
 
 const showStatus = () => {
+  console.log("-- Result --");
   for (let row = 0; row < 8; row++) {
     const line = grid[row]
-      .map((cell) => (cell === null ? "--X--" : cell))
+      .map((cell) => (cell === null ? "  .  " : " ㅁ "))
       .join(" ");
     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
   }
 
-  let a = sharedList.toArray().map((n) => n.getValue());
-  let w = "";
+  //   console.log("-- Deep Result --");
+  //   for (let row = 0; row < 8; row++) {
+  //     const line = grid[row]
+  //       .map((cell) => (cell === null ? "--X--" : cell))
+  //       .join(" ");
+  //     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
+  //     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
+  //   }
 
-  for (let i = 0; i < sharedList.count(); i++) {
-    w += `${a[i]} `;
-  }
-  console.log(w);
+  //   console.log("-- rowRestrictGrid --");
+  //   for (let i = 0; i < 8; i++) {
+  //     let line = "";
+  //     for (let j = 0; j < 8; j++) {
+  //       // 예시: row 제한이면 R, 아니면 -
+  //       line += rowRestrictGrid[i][j] ? "R " : "- ";
+  //     }
+  //     console.log(line); // 한 행 출력
+  //     console.log("\n"); // 추가 줄 바꿈
+  //   }
+
+  //   console.log("-- colRestrictGrid --");
+  //   for (let i = 0; i < 8; i++) {
+  //     let line = "";
+  //     for (let j = 0; j < 8; j++) {
+  //       line += colRestrictGrid[i][j] ? "C " : "- ";
+  //     }
+  //     console.log(line);
+  //     console.log("\n");
+  //   }
 };
