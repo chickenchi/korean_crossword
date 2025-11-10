@@ -1,5 +1,7 @@
 "use client";
 import styled from "styled-components";
+import { create_cross } from "./create_cross/create_cross";
+import { useEffect } from "react";
 
 const CrosswordDiv = styled.div``;
 const CrosswordTable = styled.table`
@@ -14,6 +16,10 @@ const CrosswordRow = styled.td`
 `;
 
 export default function Crossword() {
+  useEffect(() => {
+    create_cross();
+  }, []);
+
   return (
     <CrosswordDiv>
       <></>
