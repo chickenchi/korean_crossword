@@ -4,6 +4,7 @@ interface NodeInfo {
   dir: "vertical" | "horizontal";
   len: number;
   axis: [number, number];
+  word: "";
 }
 
 // 배열 셀 집합
@@ -40,14 +41,26 @@ for (let i = 0; i < 8; i++) {
   rowRestrictGrid[7][i] = true;
 }
 
-export const create_cross = () => {
+export const create_crossword = () => {
+  create_cross();
+  insert_crossword();
+};
+
+const insert_crossword = () => {
+  
+  nodes.forEach((value, key) => {
+
+    console.log(key, value);
+  });
+
+  return;
+};
+
+const create_cross = () => {
   for (let i = 0; i <= 10; i++) {
     createRandomTile(i);
     if (i > 0) restrictCrossPoint();
   }
-  showStatus();
-
-  return;
 };
 
 const isEmptyCell = (r: number, c: number): boolean => {
@@ -216,46 +229,21 @@ const createRandomTile = (index: number) => {
   }
 
   // 랜덤으로 작성된 내용 적용
-  nodes.set(`tile-${index}`, { dir: dir, len: len, axis: [row, col] });
+  nodes.set(`tile-${index}`, {
+    dir: dir,
+    len: len,
+    axis: [row, col],
+    word: "",
+  });
 };
 
-const showStatus = () => {
-  console.log("-- Result --");
-  for (let row = 0; row < 8; row++) {
-    const line = grid[row]
-      .map((cell) => (cell === null ? "  .  " : " ㅁ "))
-      .join(" ");
-    console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
-    console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
-  }
-
-  //   console.log("-- Deep Result --");
-  //   for (let row = 0; row < 8; row++) {
-  //     const line = grid[row]
-  //       .map((cell) => (cell === null ? "--X--" : cell))
-  //       .join(" ");
-  //     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
-  //     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
-  //   }
-
-  //   console.log("-- rowRestrictGrid --");
-  //   for (let i = 0; i < 8; i++) {
-  //     let line = "";
-  //     for (let j = 0; j < 8; j++) {
-  //       // 예시: row 제한이면 R, 아니면 -
-  //       line += rowRestrictGrid[i][j] ? "R " : "- ";
-  //     }
-  //     console.log(line); // 한 행 출력
-  //     console.log("\n"); // 추가 줄 바꿈
-  //   }
-
-  //   console.log("-- colRestrictGrid --");
-  //   for (let i = 0; i < 8; i++) {
-  //     let line = "";
-  //     for (let j = 0; j < 8; j++) {
-  //       line += colRestrictGrid[i][j] ? "C " : "- ";
-  //     }
-  //     console.log(line);
-  //     console.log("\n");
-  //   }
-};
+// const showStatus = () => {
+//   console.log("-- Result --");
+//   for (let row = 0; row < 8; row++) {
+//     const line = grid[row]
+//       .map((cell) => (cell === null ? "  .  " : " ㅁ "))
+//       .join(" ");
+//     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
+//     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
+//   }
+// };
