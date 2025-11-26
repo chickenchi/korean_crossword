@@ -5,12 +5,19 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 model word {
-  id          Int     @id @default(autoincrement())
-  word        String  @db.VarChar(6)
-  description String  @db.Text
-  hint        String? @db.Text
+  word           String? @db.VarChar(100)
+  unit_type      String? @db.VarChar(100)
+  type           String? @db.VarChar(100)
+  origin_word    String? @db.VarChar(100)
+  part_of_speech String? @db.VarChar(100)
+  definition     String? @db.Text
+  examples       String? @db.Text
+  subject        String? @db.VarChar(100)
+  proverb        String? @db.Text
+  idiom          String? @db.Text
+  related_words  String? @db.Text
+  id             Int     @id @default(autoincrement())
 }
