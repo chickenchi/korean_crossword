@@ -1,10 +1,14 @@
 import { LinkedList } from "@datastructures-js/linked-list";
 
+type Coord = { x: number; y: number };
+
 interface NodeInfo {
   dir: "vertical" | "horizontal";
   len: number;
   axis: [number, number];
   word: "";
+  crossedNumbers: number[];
+  crossedCoordinates: Coord[];
 }
 
 // 배열 셀 집합
@@ -43,13 +47,12 @@ for (let i = 0; i < 8; i++) {
 
 export const create_crossword = () => {
   create_cross();
+  showStatus();
   insert_crossword();
 };
 
 const insert_crossword = () => {
-  
   nodes.forEach((value, key) => {
-
     console.log(key, value);
   });
 
@@ -138,62 +141,113 @@ const createRandomTile = (index: number) => {
 
     // 2~6 중의 수이지만(작성은 5까지만 나오지만 겹치는 경우 6자가 나옴) 오버플로 방지
     // 세로
-    if (dir == "vertical") {
-      // rowRestrict or notSharedList
-      let limit: number;
 
-      for (limit = 1; limit <= Math.min(7 - row, 4); limit++) {
-        if (row + limit >= 8 || rowRestrictGrid[row + limit][col]) {
-          break;
+    let limit: number;
+
+    switch (dir) {
+      case "vertical":
+        // rowRestrict or notSharedList
+
+        for (limit = 1; limit <= Math.min(7 - row, 4); limit++) {
+          if (row + limit >= 8 || rowRestrictGrid[row + limit][col]) {
+            break;
+          }
         }
-      }
 
-      limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
+        limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
 
-      if (limit < 1) {
-        sharedList.removeEach((node) => node.getValue() === row * 8 + col);
-        continue;
-      }
-
-      len = Math.floor(Math.random() * limit) + 2;
-    } else {
-      // colRestrict or notSharedList
-      let limit: number;
-
-      for (limit = 1; limit <= Math.min(7 - col, 4); limit++) {
-        if (col + limit >= 8 || colRestrictGrid[row][col + limit]) {
-          break;
+        if (limit < 1) {
+          sharedList.removeEach((node) => node.getValue() === row * 8 + col);
+          continue;
         }
-      }
 
-      limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
+        len = Math.floor(Math.random() * limit) + 2;
+        break;
 
-      if (limit < 1) {
-        sharedList.removeEach((node) => node.getValue() === row * 8 + col);
-        continue;
-      }
+      case "horizontal":
+        // colRestrict or notSharedList
 
-      len = Math.floor(Math.random() * limit) + 2;
+        for (limit = 1; limit <= Math.min(7 - col, 4); limit++) {
+          if (col + limit >= 8 || colRestrictGrid[row][col + limit]) {
+            break;
+          }
+        }
+
+        limit--; // 반복문이 초과되든, rowRestrict 조건을 만족하든 간에 한 칸 빼야 함
+
+        if (limit < 1) {
+          sharedList.removeEach((node) => node.getValue() === row * 8 + col);
+          continue;
+        }
+
+        len = Math.floor(Math.random() * limit) + 2;
+        break;
     }
 
     break;
   }
 
+  let crossingCoordinates: Coord[] = [];
+  let crossingNumbers: number[] = [];
+
+  /*
+  외부 양끝에 서로 겹치는 부분이 있으면 겹침 부분 표시 후
+  길이 늘리고 초기 지점이면 초기 지점 이동
+  */
+
+  let neighborX = [0, 0, -1, len];
+  let neighborY = [-1, len, 0, 0];
+
+  for (let i = 0; i < 4; i++) {
+    let x = col + neighborX[i];
+    let y = row + neighborY[i];
+
+    if (dir == "vertical" && !neighborY[i]) continue;
+    if (dir == "horizontal" && !neighborX[i]) continue;
+
+    // 외부 양끝에 겹치는 부분이 있으면
+    if (x >= 0 && x < 8 && y >= 0 && y < 8 && grid[y][x]) {
+      const key = grid[y][x];
+
+      if (key) {
+        insertCrossInfo(key, x, y, index, crossingCoordinates, crossingNumbers); // 겹침 부분 표시 후
+        len++; // 길이 늘리고
+
+        // 초기 지점이면
+        if (neighborX[i] == -1 || neighborY[i] == -1) {
+          // 초기 지점 좌표 이동
+          col = col + neighborX[i];
+          row = row + neighborY[i];
+        }
+      }
+    }
+  }
+
   // 등록; 가로 혹은 세로 제약 추가
   for (let i = 0; i < len; i++) {
-    if (dir == "vertical") {
-      grid[row + i][col] = `tile-${index}`;
+    let x = dir == "horizontal" ? col + i : col;
+    let y = dir == "vertical" ? row + i : row;
 
-      for (let j = -1; j <= 1; j++) {
-        if (col + j >= 0 && col + j < 8)
-          rowRestrictGrid[row + i][col + j] = true;
-      }
-    } else {
-      grid[row][col + i] = `tile-${index}`;
+    if (grid[y][x]) {
+      const key = grid[y][x];
+      const keyByNumber = Number(key?.replace("tile-", ""));
+      const isExistsNumber = crossingNumbers.includes(keyByNumber);
 
-      for (let j = -1; j <= 1; j++) {
-        if (row + j >= 0 && row + j < 8)
-          colRestrictGrid[row + j][col + i] = true;
+      if (key && !isExistsNumber)
+        insertCrossInfo(key, x, y, index, crossingCoordinates, crossingNumbers);
+    }
+
+    grid[y][x] = `tile-${index}`;
+
+    for (let j = -1; j <= 1; j++) {
+      switch (dir) {
+        case "vertical":
+          if (x + j >= 0 && x + j < 8) rowRestrictGrid[y][x + j] = true;
+          break;
+
+        case "horizontal":
+          if (y + j >= 0 && y + j < 8) colRestrictGrid[y + j][x] = true;
+          break;
       }
     }
   }
@@ -234,16 +288,40 @@ const createRandomTile = (index: number) => {
     len: len,
     axis: [row, col],
     word: "",
+    crossedNumbers: crossingNumbers,
+    crossedCoordinates: crossingCoordinates,
   });
 };
 
-// const showStatus = () => {
-//   console.log("-- Result --");
-//   for (let row = 0; row < 8; row++) {
-//     const line = grid[row]
-//       .map((cell) => (cell === null ? "  .  " : " ㅁ "))
-//       .join(" ");
-//     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
-//     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
-//   }
-// };
+const insertCrossInfo = (
+  key: string,
+  x: number,
+  y: number,
+  index: number,
+  crossingCoordinates: Coord[],
+  crossingNumbers: number[]
+) => {
+  const prev = nodes.get(key);
+  let cell = key.replace("tile-", "");
+  let cellByNumber: number = Number(cell);
+  crossingCoordinates.push({ x: x, y: y });
+  crossingNumbers.push(cellByNumber);
+
+  if (prev) {
+    prev.crossedCoordinates.push({ x: x, y: y });
+    prev.crossedNumbers.push(index);
+  }
+};
+
+const showStatus = () => {
+  console.log("-- Result --");
+  for (let row = 0; row < 8; row++) {
+    const line = grid[row]
+      .map((cell) =>
+        cell === null ? "  .  " : ` ${cell.replace("tile-", "")} `
+      )
+      .join(" ");
+    console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
+    console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
+  }
+};
