@@ -1,4 +1,6 @@
 import { LinkedList } from "@datastructures-js/linked-list";
+import { getRandomWord } from "../lib/get_random_word";
+import { isPossiblePlace } from "../lib/is_possible_placement";
 
 type Coord = { x: number; y: number };
 
@@ -6,7 +8,7 @@ interface NodeInfo {
   dir: "vertical" | "horizontal";
   len: number;
   axis: [number, number];
-  word: "";
+  word: string;
   crossedNumbers: number[];
   crossedCoordinates: Coord[];
 }
@@ -45,22 +47,63 @@ for (let i = 0; i < 8; i++) {
   rowRestrictGrid[7][i] = true;
 }
 
-export const create_crossword = () => {
+export const create_crossword = (): (string | null)[][] => {
   create_cross();
-  showStatus();
   insert_crossword();
+
+  return grid;
 };
 
-const insert_crossword = () => {
+const insert_crossword = async () => {
   nodes.forEach((value, key) => {
     console.log(key, value);
   });
 
+  for (const [key, value] of nodes.entries()) {
+    const randomWord = await getRandomWord(value.len); // len → string 변환
+    const word = randomWord.word;
+    const [x, y] = value.axis;
+    const length = value.len;
+
+    let passed = true;
+
+    for (let i = 0; i < value.crossedNumbers.length; i++) {
+      const crossedNumber = value.crossedNumbers[i]; // 겹친 노드의 번호
+      const crossedNode = nodes.get("tile-" + crossedNumber); // 겹친 노드
+      const [crossedNodeX, crossedNodeY] = crossedNode!.axis; // 겹친 노드의 좌표
+      const crossedLength = crossedNode!.len;
+
+      const { x: crossedX, y: crossedY } = value.crossedCoordinates[i]; // 겹친 부분의 좌표
+
+      const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y); // 겹친 부분의 자리(본인 기준)
+      const placementInitial = word[placement]; // 겹친 부분의 글자
+
+      const crossedPlacement =
+        Math.abs(crossedNodeX - x) + Math.abs(crossedNodeY - y) + 1; // 겹친 노드의 자리(chN을 위해 +1)
+
+      passed = await isPossiblePlace({
+        length,
+        placementInitial,
+        crossedLength,
+        crossedPlacement,
+      });
+
+      if (!passed) {
+        console.log(`${placementInitial}... 이건 안 돼.`);
+        break;
+      }
+    }
+
+    if (passed) nodes.set(key, { ...value, word: word });
+  }
+
   return;
 };
 
+const dfs = () => {};
+
 const create_cross = () => {
-  for (let i = 0; i <= 10; i++) {
+  for (let i = 0; i <= 8; i++) {
     createRandomTile(i);
     if (i > 0) restrictCrossPoint();
   }
@@ -286,7 +329,7 @@ const createRandomTile = (index: number) => {
   nodes.set(`tile-${index}`, {
     dir: dir,
     len: len,
-    axis: [row, col],
+    axis: [col, row],
     word: "",
     crossedNumbers: crossingNumbers,
     crossedCoordinates: crossingCoordinates,
