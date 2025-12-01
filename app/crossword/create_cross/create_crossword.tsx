@@ -47,27 +47,188 @@ for (let i = 0; i < 8; i++) {
   rowRestrictGrid[7][i] = true;
 }
 
-export const create_crossword = (): (string | null)[][] => {
-  create_cross();
-  insert_crossword();
+export const create_crossword = async (): Promise<(string | null)[][]> => {
+  await create_cross();
+  await insert_crossword();
+
+  for (const [key, value] of nodes.entries()) {
+    for (let i = 0; i < value.len; i++) {
+      let x = value.dir == "horizontal" ? value.axis[0] + i : value.axis[0];
+      let y = value.dir == "vertical" ? value.axis[1] + i : value.axis[1];
+      grid[y][x] = value.word[i];
+    }
+  }
 
   return grid;
 };
 
+const extending_nodes = () => {
+  for (const key of nodes.keys()) {
+    for (let i = 0; i < 4; i++) {
+      const value = nodes.get(key)!;
+
+      let len = value.len;
+      let dir = value.dir;
+
+      let elX = value.axis[0];
+      let elY = value.axis[1];
+
+      let neighborX = [0, 0, -1, len];
+      let neighborY = [-1, len, 0, 0];
+
+      let index = Number(key.replace("tile-", ""));
+
+      let x = elX + neighborX[i];
+      let y = elY + neighborY[i];
+
+      if (dir == "vertical" && !neighborY[i]) continue;
+      if (dir == "horizontal" && !neighborX[i]) continue;
+
+      // 외부 양끝에 겹치는 부분이 있으면
+      if (x >= 0 && x < 8 && y >= 0 && y < 8 && grid[y][x]) {
+        const mapKey = grid[y][x];
+
+        if (mapKey) {
+          insertCrossInfo(
+            mapKey,
+            x,
+            y,
+            index,
+            value.crossedCoordinates,
+            value.crossedNumbers
+          ); // 겹침 부분 표시 후
+
+          len++;
+
+          // 초기 지점이면
+          if (neighborX[i] == -1 || neighborY[i] == -1) {
+            // 초기 지점 좌표 이동
+            elX = elX + neighborX[i];
+            elY = elY + neighborY[i];
+          }
+
+          // 제약
+          for (let j = -1; j <= 1; j++) {
+            switch (dir) {
+              case "vertical":
+                if (elX + j >= 0 && elX + j < 8)
+                  rowRestrictGrid[elY][elX + j] = true;
+                break;
+
+              case "horizontal":
+                if (elY + j >= 0 && elY + j < 8)
+                  colRestrictGrid[elY + j][elX] = true;
+                break;
+            }
+          }
+
+          // 공통 제약 셀 제거
+          // 세로
+          if (dir == "vertical") {
+            if (elY + len <= 7) {
+              sharedList.removeEach(
+                (node) => node.getValue() === (elY + len) * 8 + elX
+              );
+              rowRestrictGrid[elY + len][elX] = true;
+              colRestrictGrid[elY + len][elX] = true;
+            }
+            if (elY - 1 >= 0) {
+              sharedList.removeEach(
+                (node) => node.getValue() === (elY - 1) * 8 + elX
+              );
+              rowRestrictGrid[elY - 1][elX] = true;
+              colRestrictGrid[elY - 1][elX] = true;
+            }
+          } else {
+            if (elX + len <= 7) {
+              sharedList.removeEach(
+                (node) => node.getValue() === elY * 8 + (elX + len)
+              );
+              rowRestrictGrid[elY][elX + len] = true;
+              colRestrictGrid[elY][elX + len] = true;
+            }
+            if (elX - 1 >= 0) {
+              sharedList.removeEach(
+                (node) => node.getValue() === elY * 8 + (elX - 1)
+              );
+              rowRestrictGrid[elY][elX - 1] = true;
+              colRestrictGrid[elY][elX - 1] = true;
+            }
+          }
+
+          nodes.set(key, {
+            ...value,
+            len: len,
+            axis: [elX, elY],
+          });
+        }
+      }
+    }
+  }
+};
+
 const insert_crossword = async () => {
   for (const [key, value] of nodes.entries()) {
+    if (value.word) continue;
+
     let possible = true;
     let randomWord: { word: string };
     let word: string;
 
     do {
-      randomWord = await getRandomWord(value.len); // len → string 변환
+      randomWord = await getRandomWord({
+        len: value.len,
+      });
+
       word = randomWord.word;
 
-      possible = await dfs(value);
-    } while (possible);
+      const [x, y] = value.axis;
+      const length = value.len;
 
-    nodes.set(key, { ...value, word: word });
+      if (value.crossedNumbers.length === 0) {
+        nodes.set(key, { ...value, word: word });
+        break;
+      }
+
+      for (let i = 0; i < value.crossedNumbers.length; i++) {
+        const crossedNumber = value.crossedNumbers[i]; // 겹친 노드의 번호
+        const crossedKey = "tile-" + crossedNumber; // 겹친 노드의 키
+        const crossedNode = nodes.get(crossedKey); // 겹친 노드
+        const [crossedNodeX, crossedNodeY] = crossedNode!.axis; // 겹친 노드의 좌표
+        const crossedLength = crossedNode!.len;
+
+        const { x: crossedX, y: crossedY } = value.crossedCoordinates[i]; // 겹친 부분의 좌표
+
+        const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y); // 겹친 부분의 자리(본인 기준)
+        const placementInitial = word[placement]; // 겹친 부분의 글자
+
+        const crossedPlacement =
+          Math.abs(crossedNodeX - crossedX) +
+          Math.abs(crossedNodeY - crossedY) +
+          1; // 겹친 노드의 자리(chN을 위해 +1)
+
+        let passed = await isPossiblePlace({
+          length,
+          placementInitial,
+          crossedLength,
+          crossedPlacement,
+        });
+
+        if (!passed) {
+          possible = false;
+          break;
+        } else {
+          const condition =
+            "_".repeat(crossedPlacement - 1) +
+            placementInitial +
+            "_".repeat(crossedLength - crossedPlacement);
+
+          nodes.set(crossedKey, { ...crossedNode!, word: condition });
+          nodes.set(key, { ...value, word: word });
+          possible = await dfs(crossedKey);
+        }
+      }
+    } while (!possible);
   }
 
   nodes.forEach((value, key) => {
@@ -77,52 +238,95 @@ const insert_crossword = async () => {
   return;
 };
 
-const dfs = async (value: NodeInfo) => {
-  let randomWord: { word: string };
-  let word: string;
+const dfs = async (key: string) => {
+  const value = nodes.get(key);
+  if (!value) return false;
 
-  randomWord = await getRandomWord(value.len); // len → string 변환
-  word = randomWord.word;
+  let condition = value.word;
+  const exclude: string[] = [];
 
   const [x, y] = value.axis;
   const length = value.len;
 
-  for (let i = 0; i < value.crossedNumbers.length; i++) {
-    const crossedNumber = value.crossedNumbers[i]; // 겹친 노드의 번호
-    const crossedNode = nodes.get("tile-" + crossedNumber); // 겹친 노드
-    const [crossedNodeX, crossedNodeY] = crossedNode!.axis; // 겹친 노드의 좌표
-    const crossedLength = crossedNode!.len;
+  let valid = true;
 
-    const { x: crossedX, y: crossedY } = value.crossedCoordinates[i]; // 겹친 부분의 좌표
-
-    const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y); // 겹친 부분의 자리(본인 기준)
-    const placementInitial = word[placement]; // 겹친 부분의 글자
-
-    const crossedPlacement =
-      Math.abs(crossedNodeX - x) + Math.abs(crossedNodeY - y) + 1; // 겹친 노드의 자리(chN을 위해 +1)
-
-    let passed = await isPossiblePlace({
-      length,
-      placementInitial,
-      crossedLength,
-      crossedPlacement,
+  do {
+    const randomWord = await getRandomWord({
+      len: length,
+      condition: condition,
+      exclude: exclude,
     });
 
-    if (!passed) {
-      console.log(`${placementInitial}... 이건 안 돼.`);
+    if (!randomWord) {
+      nodes.set(key, { ...value, word: "" });
       return false;
-    } else {
-      console.log(placementInitial);
     }
-  }
+
+    const word = randomWord.word;
+
+    for (let i = 0; i < value.crossedNumbers.length; i++) {
+      const crossedNumber = value.crossedNumbers[i];
+      const crossedKey = "tile-" + crossedNumber;
+      const crossedNode = nodes.get(crossedKey);
+
+      if (crossedNode!.word) continue;
+
+      const [crossedNodeX, crossedNodeY] = crossedNode!.axis;
+      const crossedLength = crossedNode!.len;
+
+      const { x: crossedX, y: crossedY } = value.crossedCoordinates[i];
+
+      const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y);
+      const placementInitial = word[placement];
+
+      const crossedPlacement =
+        Math.abs(crossedNodeX - crossedX) +
+        Math.abs(crossedNodeY - crossedY) +
+        1;
+
+      let passed = await isPossiblePlace({
+        length,
+        placementInitial,
+        crossedLength,
+        crossedPlacement,
+      });
+
+      if (!passed) {
+        valid = false;
+        break;
+      } else {
+        const condition =
+          "_".repeat(crossedPlacement - 1) +
+          placementInitial +
+          "_".repeat(crossedLength - crossedPlacement);
+
+        nodes.set(crossedKey, { ...crossedNode!, word: condition });
+        nodes.set(key, { ...value, word: word });
+
+        const possible = await dfs(crossedKey);
+        if (!possible) {
+          valid = false;
+          break;
+        }
+      }
+    }
+
+    if (!valid) exclude.push(word);
+    else nodes.set(key, { ...value, word: word });
+  } while (valid == false);
 
   return true;
 };
 
 const create_cross = () => {
-  for (let i = 0; i <= 8; i++) {
+  for (let i = 0; i <= 12; i++) {
     createRandomTile(i);
-    if (i > 0) restrictCrossPoint();
+    showStatus();
+
+    if (i > 0) {
+      extending_nodes();
+      restrictCrossPoint();
+    }
   }
 };
 
@@ -250,40 +454,7 @@ const createRandomTile = (index: number) => {
   let crossingCoordinates: Coord[] = [];
   let crossingNumbers: number[] = [];
 
-  /*
-  외부 양끝에 서로 겹치는 부분이 있으면 겹침 부분 표시 후
-  길이 늘리고 초기 지점이면 초기 지점 이동
-  */
-
-  let neighborX = [0, 0, -1, len];
-  let neighborY = [-1, len, 0, 0];
-
-  for (let i = 0; i < 4; i++) {
-    let x = col + neighborX[i];
-    let y = row + neighborY[i];
-
-    if (dir == "vertical" && !neighborY[i]) continue;
-    if (dir == "horizontal" && !neighborX[i]) continue;
-
-    // 외부 양끝에 겹치는 부분이 있으면
-    if (x >= 0 && x < 8 && y >= 0 && y < 8 && grid[y][x]) {
-      const key = grid[y][x];
-
-      if (key) {
-        insertCrossInfo(key, x, y, index, crossingCoordinates, crossingNumbers); // 겹침 부분 표시 후
-        len++; // 길이 늘리고
-
-        // 초기 지점이면
-        if (neighborX[i] == -1 || neighborY[i] == -1) {
-          // 초기 지점 좌표 이동
-          col = col + neighborX[i];
-          row = row + neighborY[i];
-        }
-      }
-    }
-  }
-
-  // 등록; 가로 혹은 세로 제약 추가
+  // 등록
   for (let i = 0; i < len; i++) {
     let x = dir == "horizontal" ? col + i : col;
     let y = dir == "vertical" ? row + i : row;
@@ -383,5 +554,17 @@ const showStatus = () => {
       .join(" ");
     console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
     console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
+  }
+
+  console.log("=== rowRestrictGrid ===");
+  for (let y = 0; y < 8; y++) {
+    console.log(rowRestrictGrid[y].map((v) => (v ? " 1 " : " 0 ")).join(" "));
+    console.log("");
+  }
+
+  console.log("\n=== colRestrictGrid ===");
+  for (let y = 0; y < 8; y++) {
+    console.log(colRestrictGrid[y].map((v) => (v ? " 1 " : " 0 ")).join(" "));
+    console.log("");
   }
 };

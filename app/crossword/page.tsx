@@ -43,9 +43,13 @@ export default function Crossword() {
   const [grid, setGrid] = useState<(string | null)[][] | null>(null);
 
   useEffect(() => {
-    const grid: (string | null)[][] = create_crossword();
+    const getGrid = async () => {
+      const grid: (string | null)[][] = await create_crossword();
 
-    setGrid(grid);
+      setGrid(grid);
+    };
+
+    getGrid();
   }, []);
 
   return (
@@ -57,6 +61,7 @@ export default function Crossword() {
               {Array.from({ length: 8 }).map((_, c) => (
                 <CrosswordRow key={c} activated={grid?.[r][c] != null}>
                   <CrosswordAnswer
+                    value={grid?.[r][c]}
                     disabled={grid?.[r][c] == null}
                   ></CrosswordAnswer>
                 </CrosswordRow>

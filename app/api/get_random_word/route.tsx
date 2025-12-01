@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const len = Number(searchParams.get("len"));
+    const { len, condition, exclude = [] } = await req.json();
 
     if (!len) {
       return NextResponse.json({ error: "Missing len" }, { status: 400 });
@@ -12,60 +12,95 @@ export async function GET(req: Request) {
 
     const unit_type = "단어";
 
-    // 1) 범위 구하기: min/max id
-    const range = await prisma.word.aggregate({
-      where: {
-        len,
-        unit_type,
-      },
-      _min: { id: true },
-      _max: { id: true },
-    });
+    //
+    // 0) 패턴(condition) → c1~cN 인덱스 조건으로 변환
+    //
+    // condition이 null이면 전체 패턴 ("%")로 간주
+    const mask = condition ?? "";
 
-    const minId = range._min.id;
-    const maxId = range._max.id;
+    // 예: _가__ → [{pos:2, char:'가'}]
+    const indexConditions: { pos: number; char: string }[] = [];
 
-    if (!minId || !maxId) {
-      return NextResponse.json({ error: "No data" }, { status: 404 });
+    for (let i = 0; i < mask.length; i++) {
+      const ch = mask[i];
+      if (ch !== "_" && ch !== "%") {
+        // position은 1-based
+        indexConditions.push({ pos: i + 1, char: ch });
+      }
     }
 
-    // 2) 랜덤 ID 생성
-    const randomId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
+    //
+    // 1) COUNT(*) — 인덱스 기반으로 매우 빠름
+    //
+    const countResult = await prisma.$queryRaw<{ cnt: bigint }[]>(Prisma.sql`
+      SELECT COUNT(*) AS cnt
+      FROM Word
+      WHERE len = ${len}
+        AND unit_type = ${unit_type}
+        ${
+          exclude.length > 0
+            ? Prisma.sql`
+          AND word NOT IN (${Prisma.join(exclude)})
+        `
+            : Prisma.empty
+        }
+        ${
+          indexConditions.length > 0
+            ? Prisma.sql`
+          ${Prisma.join(
+            indexConditions.map(
+              (ic) =>
+                Prisma.sql`AND c${Prisma.raw(ic.pos.toString())} = ${ic.char}`
+            ),
+            " "
+          )}
+        `
+            : Prisma.empty
+        }
+    `);
 
-    // 3) 첫 번째 후보 (randomId 이상)
-    const topCandidate = await prisma.word.findFirst({
-      where: {
-        id: { gte: randomId },
-        len,
-        unit_type,
-      },
-      orderBy: { id: "asc" },
-      select: { id: true, word: true },
-    });
+    const rawCount = countResult[0]?.cnt ?? 0n;
+    const count = Number(rawCount);
 
-    if (topCandidate) {
-      return NextResponse.json(topCandidate, { status: 200 });
+    if (count === 0) {
+      return NextResponse.json(null);
     }
 
-    // 4) 없으면 (randomId 아래에서 다음 것 찾기)
-    const fallbackCandidate = await prisma.word.findFirst({
-      where: {
-        id: { lt: randomId },
-        len,
-        unit_type,
-      },
-      orderBy: { id: "asc" },
-      select: { id: true, word: true },
-    });
+    // offset
+    const offset = Math.floor(Math.random() * count);
 
-    if (fallbackCandidate) {
-      return NextResponse.json(fallbackCandidate, { status: 200 });
-    }
-
-    return NextResponse.json(
-      { error: "No word found (unexpected)" },
-      { status: 404 }
+    //
+    // 2) LIMIT offset, 1 로 랜덤 선택
+    //
+    const result = await prisma.$queryRaw<{ id: number; word: string }[]>(
+      Prisma.sql`
+        SELECT id, word
+        FROM Word
+        WHERE len = ${len}
+          AND unit_type = ${unit_type}
+          ${
+            exclude.length > 0
+              ? Prisma.sql`AND word NOT IN (${Prisma.join(exclude)})`
+              : Prisma.empty
+          }
+          ${
+            indexConditions.length > 0
+              ? Prisma.sql`
+            ${Prisma.join(
+              indexConditions.map(
+                (ic) =>
+                  Prisma.sql`AND c${Prisma.raw(ic.pos.toString())} = ${ic.char}`
+              ),
+              " "
+            )}
+          `
+              : Prisma.empty
+          }
+        LIMIT ${offset}, 1
+      `
     );
+
+    return NextResponse.json(result[0] ?? null);
   } catch (error) {
     console.error(error);
     return NextResponse.json(
