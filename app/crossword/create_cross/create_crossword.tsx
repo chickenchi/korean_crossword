@@ -47,11 +47,40 @@ for (let i = 0; i < 8; i++) {
   rowRestrictGrid[7][i] = true;
 }
 
+const setup = () => {
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      grid[y][x] = null;
+    }
+  }
+
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      rowRestrictGrid[y][x] = false;
+      colRestrictGrid[y][x] = false;
+    }
+  }
+
+  for (let i = 0; i < 8; i++) {
+    rowRestrictGrid[7][i] = true;
+    colRestrictGrid[i][7] = true;
+  }
+
+  sharedList.clear();
+  for (let i = 0; i < 63; i++) {
+    sharedList.insertLast(i);
+  }
+
+  nodes.clear();
+};
+
 export const create_crossword = async (): Promise<(string | null)[][]> => {
+  setup();
+
   await create_cross();
   await insert_crossword();
 
-  for (const [key, value] of nodes.entries()) {
+  for (const value of nodes.values()) {
     for (let i = 0; i < value.len; i++) {
       let x = value.dir == "horizontal" ? value.axis[0] + i : value.axis[0];
       let y = value.dir == "vertical" ? value.axis[1] + i : value.axis[1];
@@ -60,6 +89,18 @@ export const create_crossword = async (): Promise<(string | null)[][]> => {
   }
 
   return grid;
+};
+
+const create_cross = () => {
+  for (let i = 0; i <= 9; i++) {
+    // 9로 할 예정
+    createRandomTile(i);
+
+    if (i > 0) {
+      extending_nodes();
+      restrictCrossPoint();
+    }
+  }
 };
 
 const extending_nodes = () => {
@@ -168,6 +209,10 @@ const extending_nodes = () => {
 };
 
 const insert_crossword = async () => {
+  nodes.forEach((value, key) => {
+    console.log(key, value);
+  });
+
   for (const [key, value] of nodes.entries()) {
     if (value.word) continue;
 
@@ -175,9 +220,12 @@ const insert_crossword = async () => {
     let randomWord: { word: string };
     let word: string;
 
+    const exclude: string[] = [];
+
     do {
       randomWord = await getRandomWord({
         len: value.len,
+        exclude: exclude,
       });
 
       word = randomWord.word;
@@ -218,17 +266,26 @@ const insert_crossword = async () => {
           possible = false;
           break;
         } else {
-          const condition =
-            "_".repeat(crossedPlacement - 1) +
-            placementInitial +
-            "_".repeat(crossedLength - crossedPlacement);
+          let prev = crossedNode!.word || "_".repeat(crossedLength);
+
+          let arr = prev.split("");
+          arr[crossedPlacement - 1] = placementInitial;
+
+          const condition = arr.join("");
 
           nodes.set(crossedKey, { ...crossedNode!, word: condition });
           nodes.set(key, { ...value, word: word });
           possible = await dfs(crossedKey);
         }
       }
+
+      if (!possible) exclude.push(word);
     } while (!possible);
+
+    console.log(`-- 분기 ${key} --`);
+    nodes.forEach((value, key) => {
+      console.log(key, value);
+    });
   }
 
   nodes.forEach((value, key) => {
@@ -243,6 +300,9 @@ const dfs = async (key: string) => {
   if (!value) return false;
 
   let condition = value.word;
+
+  if (condition && !condition.includes("_")) return true;
+
   const exclude: string[] = [];
 
   const [x, y] = value.axis;
@@ -258,14 +318,19 @@ const dfs = async (key: string) => {
     });
 
     if (!randomWord) {
+      console.log(`${condition}에서 단어를 찾을 수 없었습니다.
+by: ${key}`);
       nodes.set(key, { ...value, word: "" });
       return false;
     }
 
     const word = randomWord.word;
 
+    nodes.set(key, { ...value, word: word });
+
     for (let i = 0; i < value.crossedNumbers.length; i++) {
-      const crossedNumber = value.crossedNumbers[i];
+      const val = nodes.get(key);
+      const crossedNumber = val!.crossedNumbers[i];
       const crossedKey = "tile-" + crossedNumber;
       const crossedNode = nodes.get(crossedKey);
 
@@ -274,7 +339,7 @@ const dfs = async (key: string) => {
       const [crossedNodeX, crossedNodeY] = crossedNode!.axis;
       const crossedLength = crossedNode!.len;
 
-      const { x: crossedX, y: crossedY } = value.crossedCoordinates[i];
+      const { x: crossedX, y: crossedY } = val!.crossedCoordinates[i];
 
       const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y);
       const placementInitial = word[placement];
@@ -291,43 +356,45 @@ const dfs = async (key: string) => {
         crossedPlacement,
       });
 
-      if (!passed) {
+      if (!passed.possible) {
+        console.log(`${placementInitial}(이)라는 들어올 수 없는 글자가 있습니다.
+by: ${key}`);
         valid = false;
         break;
       } else {
-        const condition =
-          "_".repeat(crossedPlacement - 1) +
-          placementInitial +
-          "_".repeat(crossedLength - crossedPlacement);
+        let prev = crossedNode!.word || "_".repeat(crossedLength);
+
+        let arr = prev.split("");
+        arr[crossedPlacement - 1] = placementInitial;
+
+        const condition = arr.join("");
 
         nodes.set(crossedKey, { ...crossedNode!, word: condition });
-        nodes.set(key, { ...value, word: word });
-
-        const possible = await dfs(crossedKey);
-        if (!possible) {
-          valid = false;
-          break;
-        }
       }
     }
 
-    if (!valid) exclude.push(word);
-    else nodes.set(key, { ...value, word: word });
+    if (!valid) {
+      exclude.push(word);
+      continue;
+    }
+
+    for (let i = 0; i < value.crossedNumbers.length; i++) {
+      const val = nodes.get(key);
+      const crossedNumber = val!.crossedNumbers[i];
+      const crossedKey = "tile-" + crossedNumber;
+
+      const crossedNode = nodes.get(crossedKey);
+      if (crossedNode!.word && !crossedNode!.word.includes("_")) continue;
+
+      const possible = await dfs(crossedKey);
+      if (!possible) {
+        valid = false;
+        break;
+      }
+    }
   } while (valid == false);
 
   return true;
-};
-
-const create_cross = () => {
-  for (let i = 0; i <= 12; i++) {
-    createRandomTile(i);
-    showStatus();
-
-    if (i > 0) {
-      extending_nodes();
-      restrictCrossPoint();
-    }
-  }
 };
 
 const isEmptyCell = (r: number, c: number): boolean => {
@@ -403,7 +470,7 @@ const createRandomTile = (index: number) => {
       dir = Math.random() < 0.5 ? "horizontal" : "vertical";
     }
 
-    // 2~6 중의 수이지만(작성은 5까지만 나오지만 겹치는 경우 6자가 나옴) 오버플로 방지
+    // 2~6 중의 수이지만(작성은 4까지만 나오지만 겹치는 경우 6자가 나옴) 오버플로 방지
     // 세로
 
     let limit: number;
@@ -412,7 +479,7 @@ const createRandomTile = (index: number) => {
       case "vertical":
         // rowRestrict or notSharedList
 
-        for (limit = 1; limit <= Math.min(7 - row, 4); limit++) {
+        for (limit = 1; limit <= Math.min(7 - row, 3); limit++) {
           if (row + limit >= 8 || rowRestrictGrid[row + limit][col]) {
             break;
           }
@@ -431,7 +498,7 @@ const createRandomTile = (index: number) => {
       case "horizontal":
         // colRestrict or notSharedList
 
-        for (limit = 1; limit <= Math.min(7 - col, 4); limit++) {
+        for (limit = 1; limit <= Math.min(7 - col, 3); limit++) {
           if (col + limit >= 8 || colRestrictGrid[row][col + limit]) {
             break;
           }
@@ -444,7 +511,7 @@ const createRandomTile = (index: number) => {
           continue;
         }
 
-        len = Math.floor(Math.random() * limit) + 2;
+        len = Math.min(Math.floor(Math.random() * limit) + 2, 4);
         break;
     }
 

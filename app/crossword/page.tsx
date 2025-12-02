@@ -41,16 +41,27 @@ const CrosswordAnswer = styled.input`
 
 export default function Crossword() {
   const [grid, setGrid] = useState<(string | null)[][] | null>(null);
+  const [change, setChange] = useState(0);
 
   useEffect(() => {
     const getGrid = async () => {
+      clear();
+
       const grid: (string | null)[][] = await create_crossword();
 
       setGrid(grid);
     };
 
     getGrid();
-  }, []);
+  }, [change]);
+
+  const clear = () => {
+    setGrid(
+      Array(8)
+        .fill("")
+        .map(() => Array(8).fill(""))
+    );
+  };
 
   return (
     <CrosswordDiv>
@@ -70,6 +81,8 @@ export default function Crossword() {
           ))}
         </CrosswordBody>
       </CrosswordTable>
+
+      <button onClick={() => setChange(change + 1)}>바꾸기</button>
     </CrosswordDiv>
   );
 }
