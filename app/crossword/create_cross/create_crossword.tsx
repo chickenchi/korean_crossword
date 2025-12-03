@@ -4,7 +4,7 @@ import { isPossiblePlace } from "../lib/is_possible_placement";
 
 type Coord = { x: number; y: number };
 
-interface NodeInfo {
+export interface NodeInfo {
   dir: "vertical" | "horizontal";
   len: number;
   axis: [number, number];
@@ -74,26 +74,26 @@ const setup = () => {
   nodes.clear();
 };
 
-export const create_crossword = async (): Promise<(string | null)[][]> => {
+export const create_crossword = async (): Promise<
+  [(string | null)[][], Map<string, NodeInfo>]
+> => {
   setup();
 
   await create_cross();
   await insert_crossword();
 
-  for (const value of nodes.values()) {
-    for (let i = 0; i < value.len; i++) {
-      let x = value.dir == "horizontal" ? value.axis[0] + i : value.axis[0];
-      let y = value.dir == "vertical" ? value.axis[1] + i : value.axis[1];
-      grid[y][x] = value.word[i];
-    }
-  }
-
-  return grid;
+  return [grid, nodes];
 };
 
+const isAllTrue = (grid: boolean[][]) =>
+  grid.every((row) => row.every((cell) => cell === true));
+
 const create_cross = () => {
-  for (let i = 0; i <= 9; i++) {
-    // 9로 할 예정
+  for (let i = 0; i <= 19; i++) {
+    if (!sharedList.count()) break;
+
+    if (isAllTrue(rowRestrictGrid) && isAllTrue(colRestrictGrid)) break;
+
     createRandomTile(i);
 
     if (i > 0) {
@@ -209,10 +209,6 @@ const extending_nodes = () => {
 };
 
 const insert_crossword = async () => {
-  nodes.forEach((value, key) => {
-    console.log(key, value);
-  });
-
   for (const [key, value] of nodes.entries()) {
     if (value.word) continue;
 
@@ -281,16 +277,7 @@ const insert_crossword = async () => {
 
       if (!possible) exclude.push(word);
     } while (!possible);
-
-    console.log(`-- 분기 ${key} --`);
-    nodes.forEach((value, key) => {
-      console.log(key, value);
-    });
   }
-
-  nodes.forEach((value, key) => {
-    console.log(key, value);
-  });
 
   return;
 };
@@ -444,6 +431,8 @@ const createRandomTile = (index: number) => {
   let len: number;
 
   while (true) {
+    if (!sharedList.count()) return;
+
     // (가능한 최대 길이) - (제한된 셀의 개수) = 받아온 리스트의 크기
     randomValue = sharedList.toArray().map((n) => n.getValue())[
       Math.floor(Math.random() * sharedList.count())
