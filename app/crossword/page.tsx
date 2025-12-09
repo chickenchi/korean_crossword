@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { findDescription } from "./lib/find_description";
 import { getHints } from "./lib/get_hints";
 import { toInitials } from "../tools/toInitials";
+import { useAtom } from "jotai";
+import { pointAtom } from "../atom/point";
 
 const LoadingPreventDiv = styled.div`
   position: absolute;
@@ -116,11 +118,27 @@ const CrosswordAnswerInput = styled.input`
   outline: none;
 `;
 
+const PointDiv = styled.div`
+  display: flex;
+  align-items: center;
+`;
+
+const PointImg = styled.img`
+  width: 20px;
+  height: 20px;
+
+  margin-left: 5px;
+`;
+const Point = styled.p`
+  margin-left: 5px;
+`;
+
 export default function Crossword() {
   const [grid, setGrid] = useState<(string | null)[][] | null>(null);
   const [nodes, setNodes] = useState<Map<string, NodeInfo> | null>(null);
   const [change, setChange] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [point, setPoint] = useAtom(pointAtom);
 
   const [answer, setAnswer] = useState("");
 
@@ -210,6 +228,8 @@ export default function Crossword() {
         reset();
       }
 
+      setPoint(point + 1);
+
       const sound = new Audio("./SE/correct.mp3");
       sound.currentTime = 0.12;
       sound.play();
@@ -251,6 +271,10 @@ export default function Crossword() {
 
   return (
     <CrosswordDiv>
+      <PointDiv>
+        <PointImg src="./images/point.png" />
+        <Point>{point}</Point>
+      </PointDiv>
       {loading && (
         <LoadingPreventDiv>잠시만 기다려 주세요...</LoadingPreventDiv>
       )}

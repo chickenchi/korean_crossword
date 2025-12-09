@@ -260,6 +260,8 @@ const insert_crossword = async () => {
 
         if (!passed) {
           possible = false;
+          console.log(`${placementInitial}(이)라는 들어올 수 없는 글자가 있습니다.
+by: ${key} from: insert_crossword`);
           break;
         } else {
           let prev = crossedNode!.word || "_".repeat(crossedLength);
@@ -306,7 +308,7 @@ const dfs = async (key: string) => {
 
     if (!randomWord) {
       console.log(`${condition}에서 단어를 찾을 수 없었습니다.
-by: ${key}`);
+by: ${key} from: dfs`);
       nodes.set(key, { ...value, word: "" });
       return false;
     }
@@ -345,7 +347,7 @@ by: ${key}`);
 
       if (!passed.possible) {
         console.log(`${placementInitial}(이)라는 들어올 수 없는 글자가 있습니다.
-by: ${key}`);
+by: ${key} from: dfs`);
         valid = false;
         break;
       } else {
