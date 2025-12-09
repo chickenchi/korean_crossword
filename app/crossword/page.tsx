@@ -33,6 +33,8 @@ const CrosswordTable = styled.table`
   border-collapse: collapse;
 
   width: 50vw;
+  min-width: 350px;
+  max-width: 500px;
   aspect-ratio: 1 / 1;
 `;
 const CrosswordBody = styled.tbody`
@@ -79,14 +81,14 @@ const CrosswordAnswerDiv = styled.div`
 const POSDiv = styled.div`
   width: 100%;
 
-  font-size: 13pt;
+  font-size: 15pt;
   line-height: 1.3;
 `;
 
 const DefinitionDiv = styled.div`
   width: 100%;
 
-  font-size: 13pt;
+  font-size: 14pt;
   line-height: 1.3;
 
   white-space: pre-line;
@@ -129,8 +131,11 @@ const PointImg = styled.img`
 
   margin-left: 5px;
 `;
+
 const Point = styled.p`
   margin-left: 5px;
+
+  font-size: 13pt;
 `;
 
 export default function Crossword() {

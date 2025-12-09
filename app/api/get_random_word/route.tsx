@@ -18,6 +18,8 @@ export async function POST(req: Request) {
     // condition이 null이면 전체 패턴 ("%")로 간주
     const mask = condition ?? "";
 
+    console.log([len, mask, exclude]);
+
     // 예: _가__ → [{pos:2, char:'가'}]
     const indexConditions: { pos: number; char: string }[] = [];
 

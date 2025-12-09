@@ -82,6 +82,8 @@ export const create_crossword = async (): Promise<
   await create_cross();
   await insert_crossword();
 
+  console.log(nodes);
+
   return [grid, nodes];
 };
 
@@ -300,6 +302,8 @@ const dfs = async (key: string) => {
   let valid = true;
 
   do {
+    valid = true;
+
     const randomWord = await getRandomWord({
       len: length,
       condition: condition,
@@ -378,6 +382,9 @@ by: ${key} from: dfs`);
       const possible = await dfs(crossedKey);
       if (!possible) {
         valid = false;
+        exclude.push(word);
+        console.log(`${word}: 위 단어를 사용할 수 없습니다.
+사유: 이후 단어에서 사용 불가 from: dfs`);
         break;
       }
     }
