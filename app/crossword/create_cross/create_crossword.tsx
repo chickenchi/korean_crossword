@@ -281,6 +281,8 @@ by: ${key}`);
     // 임시 단어 설정
     nodes.set(key, { ...value, word: word });
 
+    const backup = new Map<string, string>();
+
     for (let i = 0; i < value.crossedNumbers.length; i++) {
       const val = nodes.get(key);
       const crossedNumber = val!.crossedNumbers[i];
@@ -316,15 +318,12 @@ by: ${key}`);
         break;
       } else {
         const updatedCrossedNode = nodes.get(crossedKey);
+        backup.set(crossedKey, updatedCrossedNode!.word);
         let prev = updatedCrossedNode!.word || "_".repeat(crossedLength);
-
-        if (updatedCrossedNode!.word) console.log(updatedCrossedNode!.word);
 
         let arr = prev.split("");
         arr[crossedPlacement - 1] = placementInitial;
         const condition = arr.join("");
-
-        console.log(condition);
 
         nodes.set(crossedKey, { ...updatedCrossedNode!, word: condition });
       }
@@ -342,7 +341,6 @@ by: ${key}`);
 
       const crossedNode = nodes.get(crossedKey);
       if (crossedNode!.word && !crossedNode!.word.includes("_")) continue;
-      console.log(`${crossedKey} 검사 중... by. ${key}`);
 
       const possibleDFS = await dfs(crossedKey);
       if (!possibleDFS) {
@@ -350,6 +348,12 @@ by: ${key}`);
         impossible.push(word);
         console.log(`${word}: 위 단어를 사용할 수 없습니다.
 사유: 이후 단어에서 사용 불가`);
+
+        // 복구
+        nodes.set(crossedKey, {
+          ...crossedNode!,
+          word: backup.get(crossedKey)!,
+        });
         break;
       }
     }
