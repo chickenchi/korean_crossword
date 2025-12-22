@@ -47,13 +47,21 @@ for (let i = 0; i < 8; i++) {
   rowRestrictGrid[7][i] = true;
 }
 
+// 제외 단어 목록
+const exclude: string[] = [];
+
 const setup = () => {
+  // 제외 단어 목록 초기화
+  exclude.length = 0;
+
+  // grid 초기화
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       grid[y][x] = null;
     }
   }
 
+  // rowRestrictGrid, colRestrictGrid 초기화
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       rowRestrictGrid[y][x] = false;
@@ -61,16 +69,20 @@ const setup = () => {
     }
   }
 
+  // 가장자리 제약
   for (let i = 0; i < 8; i++) {
     rowRestrictGrid[7][i] = true;
     colRestrictGrid[i][7] = true;
   }
 
+  // sharedList 초기화
   sharedList.clear();
+
   for (let i = 0; i < 63; i++) {
     sharedList.insertLast(i);
   }
 
+  // nodes 초기화
   nodes.clear();
 };
 
@@ -212,113 +224,61 @@ const extending_nodes = () => {
 
 const insert_crossword = async () => {
   for (const [key, value] of nodes.entries()) {
-    if (value.word) continue;
+    if (value.word) continue; // 이미 단어가 있으면 패스
 
-    let possible = true;
-    let randomWord: { word: string };
-    let word: string;
-
-    const exclude: string[] = [];
-
-    do {
-      randomWord = await getRandomWord({
-        len: value.len,
-        exclude: exclude,
-      });
-
-      word = randomWord.word;
-
-      const [x, y] = value.axis;
-      const length = value.len;
-
-      if (value.crossedNumbers.length === 0) {
-        nodes.set(key, { ...value, word: word });
-        break;
-      }
-
-      for (let i = 0; i < value.crossedNumbers.length; i++) {
-        const crossedNumber = value.crossedNumbers[i]; // 겹친 노드의 번호
-        const crossedKey = "tile-" + crossedNumber; // 겹친 노드의 키
-        const crossedNode = nodes.get(crossedKey); // 겹친 노드
-        const [crossedNodeX, crossedNodeY] = crossedNode!.axis; // 겹친 노드의 좌표
-        const crossedLength = crossedNode!.len;
-
-        const { x: crossedX, y: crossedY } = value.crossedCoordinates[i]; // 겹친 부분의 좌표
-
-        const placement = Math.abs(crossedX - x) + Math.abs(crossedY - y); // 겹친 부분의 자리(본인 기준)
-        const placementInitial = word[placement]; // 겹친 부분의 글자
-
-        const crossedPlacement =
-          Math.abs(crossedNodeX - crossedX) +
-          Math.abs(crossedNodeY - crossedY) +
-          1; // 겹친 노드의 자리(chN을 위해 +1)
-
-        let passed = await isPossiblePlace({
-          length,
-          placementInitial,
-          crossedLength,
-          crossedPlacement,
-        });
-
-        if (!passed) {
-          possible = false;
-          console.log(`${placementInitial}(이)라는 들어올 수 없는 글자가 있습니다.
-by: ${key} from: insert_crossword`);
-          break;
-        } else {
-          let prev = crossedNode!.word || "_".repeat(crossedLength);
-
-          let arr = prev.split("");
-          arr[crossedPlacement - 1] = placementInitial;
-
-          const condition = arr.join("");
-
-          nodes.set(crossedKey, { ...crossedNode!, word: condition });
-          nodes.set(key, { ...value, word: word });
-          possible = await dfs(crossedKey);
-        }
-      }
-
-      if (!possible) exclude.push(word);
-    } while (!possible);
+    const possible = await dfs(key);
+    if (!possible) {
+      console.log(`생성 실패.`);
+      return;
+    }
   }
-
-  return;
 };
 
 const dfs = async (key: string) => {
+  // 현재 노드 정보 가져오기
   const value = nodes.get(key);
+  // 값은 당연히 있으나 typescript 오류 방지용
   if (!value) return false;
 
+  // 조건
   let condition = value.word;
 
+  // 단어가 완성되어 있으면 패스
   if (condition && !condition.includes("_")) return true;
 
-  const exclude: string[] = [];
+  // 올 수 없는 단어 목록
+  const impossible: string[] = [];
 
   const [x, y] = value.axis;
   const length = value.len;
 
-  let valid = true;
+  let possible = true;
+
+  let word: string;
 
   do {
-    valid = true;
+    // 임시 단어 비우기
+    nodes.set(key, { ...value, word: "" });
+    possible = true;
 
+    // 1. 단어 가져오기
     const randomWord = await getRandomWord({
       len: length,
       condition: condition,
       exclude: exclude,
+      impossible: impossible,
     });
 
     if (!randomWord) {
       console.log(`${condition}에서 단어를 찾을 수 없었습니다.
-by: ${key} from: dfs`);
+by: ${key}`);
       nodes.set(key, { ...value, word: "" });
       return false;
     }
 
-    const word = randomWord.word;
+    word = randomWord.word;
 
+    // 임시 단어 설정
     nodes.set(key, { ...value, word: word });
 
     for (let i = 0; i < value.crossedNumbers.length; i++) {
@@ -351,8 +311,8 @@ by: ${key} from: dfs`);
 
       if (!passed.possible) {
         console.log(`${placementInitial}(이)라는 들어올 수 없는 글자가 있습니다.
-by: ${key} from: dfs`);
-        valid = false;
+by: ${key}`);
+        possible = false;
         break;
       } else {
         let prev = crossedNode!.word || "_".repeat(crossedLength);
@@ -366,8 +326,8 @@ by: ${key} from: dfs`);
       }
     }
 
-    if (!valid) {
-      exclude.push(word);
+    if (!possible) {
+      impossible.push(word);
       continue;
     }
 
@@ -379,17 +339,19 @@ by: ${key} from: dfs`);
       const crossedNode = nodes.get(crossedKey);
       if (crossedNode!.word && !crossedNode!.word.includes("_")) continue;
 
-      const possible = await dfs(crossedKey);
-      if (!possible) {
-        valid = false;
-        exclude.push(word);
+      const possibleDFS = await dfs(crossedKey);
+      if (!possibleDFS) {
+        possible = false;
+        impossible.push(word);
         console.log(`${word}: 위 단어를 사용할 수 없습니다.
-사유: 이후 단어에서 사용 불가 from: dfs`);
+사유: 이후 단어에서 사용 불가`);
         break;
       }
     }
-  } while (valid == false);
+  } while (possible == false);
 
+  // 사용한 단어는 제외 목록에 추가
+  exclude.push(word);
   return true;
 };
 

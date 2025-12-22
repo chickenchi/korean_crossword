@@ -2,10 +2,12 @@ export async function getRandomWord({
   len,
   condition,
   exclude = [],
+  impossible = [],
 }: {
   len: number;
   condition?: string; // "__가__" 같은 패턴
   exclude?: string[];
+  impossible?: string[];
 }) {
   try {
     const response = await fetch(`/api/get_random_word`, {

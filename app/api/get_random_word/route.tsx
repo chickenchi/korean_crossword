@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 
 export async function POST(req: Request) {
   try {
-    const { len, condition, exclude = [] } = await req.json();
+    const { len, condition, exclude = [], impossible = [] } = await req.json();
 
     if (!len) {
       return NextResponse.json({ error: "Missing len" }, { status: 400 });
@@ -17,8 +17,6 @@ export async function POST(req: Request) {
     //
     // condition이 null이면 전체 패턴 ("%")로 간주
     const mask = condition ?? "";
-
-    console.log([len, mask, exclude]);
 
     // 예: _가__ → [{pos:2, char:'가'}]
     const indexConditions: { pos: number; char: string }[] = [];
@@ -47,6 +45,13 @@ export async function POST(req: Request) {
             : Prisma.empty
         }
         ${
+          impossible.length > 0
+            ? Prisma.sql`
+          AND word NOT IN (${Prisma.join(impossible)})
+        `
+            : Prisma.empty
+        }
+        ${
           indexConditions.length > 0
             ? Prisma.sql`
           ${Prisma.join(
@@ -61,7 +66,7 @@ export async function POST(req: Request) {
         }
     `);
 
-    const rawCount = countResult[0]?.cnt ?? 0n;
+    const rawCount = countResult[0]?.cnt ?? BigInt(0);
     const count = Number(rawCount);
 
     if (count === 0) {
@@ -83,6 +88,11 @@ export async function POST(req: Request) {
           ${
             exclude.length > 0
               ? Prisma.sql`AND word NOT IN (${Prisma.join(exclude)})`
+              : Prisma.empty
+          }
+          ${
+            impossible.length > 0
+              ? Prisma.sql`AND word NOT IN (${Prisma.join(impossible)})`
               : Prisma.empty
           }
           ${
