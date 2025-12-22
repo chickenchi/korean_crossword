@@ -242,6 +242,7 @@ const dfs = async (key: string) => {
 
   // 조건
   let condition = value.word;
+  console.log(condition);
 
   // 단어가 완성되어 있으면 패스
   if (condition && !condition.includes("_")) return true;
@@ -257,8 +258,6 @@ const dfs = async (key: string) => {
   let word: string;
 
   do {
-    // 임시 단어 비우기
-    nodes.set(key, { ...value, word: "" });
     possible = true;
 
     // 1. 단어 가져오기
@@ -272,6 +271,7 @@ const dfs = async (key: string) => {
     if (!randomWord) {
       console.log(`${condition}에서 단어를 찾을 수 없었습니다.
 by: ${key}`);
+      // 임시 단어 비우기
       nodes.set(key, { ...value, word: "" });
       return false;
     }
@@ -287,7 +287,7 @@ by: ${key}`);
       const crossedKey = "tile-" + crossedNumber;
       const crossedNode = nodes.get(crossedKey);
 
-      if (crossedNode!.word) continue;
+      if (crossedNode!.word && !crossedNode!.word.includes("_")) continue;
 
       const [crossedNodeX, crossedNodeY] = crossedNode!.axis;
       const crossedLength = crossedNode!.len;
@@ -315,14 +315,18 @@ by: ${key}`);
         possible = false;
         break;
       } else {
-        let prev = crossedNode!.word || "_".repeat(crossedLength);
+        const updatedCrossedNode = nodes.get(crossedKey);
+        let prev = updatedCrossedNode!.word || "_".repeat(crossedLength);
+
+        if (updatedCrossedNode!.word) console.log(updatedCrossedNode!.word);
 
         let arr = prev.split("");
         arr[crossedPlacement - 1] = placementInitial;
-
         const condition = arr.join("");
 
-        nodes.set(crossedKey, { ...crossedNode!, word: condition });
+        console.log(condition);
+
+        nodes.set(crossedKey, { ...updatedCrossedNode!, word: condition });
       }
     }
 
@@ -338,6 +342,7 @@ by: ${key}`);
 
       const crossedNode = nodes.get(crossedKey);
       if (crossedNode!.word && !crossedNode!.word.includes("_")) continue;
+      console.log(`${crossedKey} 검사 중... by. ${key}`);
 
       const possibleDFS = await dfs(crossedKey);
       if (!possibleDFS) {
