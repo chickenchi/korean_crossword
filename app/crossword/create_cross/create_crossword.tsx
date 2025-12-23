@@ -232,6 +232,25 @@ const insert_crossword = async () => {
       return;
     }
   }
+
+  delete_unintersected_nodes();
+};
+
+const delete_unintersected_nodes = () => {
+  for (const [key, value] of nodes.entries()) {
+    if (value.crossedNumbers.length == 0) {
+      nodes.delete(key);
+    }
+  }
+
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const cell = grid[y][x];
+      if (cell && !nodes.has(cell)) {
+        grid[y][x] = null;
+      }
+    }
+  }
 };
 
 const dfs = async (key: string) => {
@@ -577,30 +596,5 @@ const insertCrossInfo = (
   if (prev) {
     prev.crossedCoordinates.push({ x: x, y: y });
     prev.crossedNumbers.push(index);
-  }
-};
-
-const showStatus = () => {
-  console.log("-- Result --");
-  for (let row = 0; row < 8; row++) {
-    const line = grid[row]
-      .map((cell) =>
-        cell === null ? "  .  " : ` ${cell.replace("tile-", "")} `
-      )
-      .join(" ");
-    console.log(line + "\n"); // 각 행 뒤에 줄 바꿈 추가
-    console.log("\n"); // 각 행 뒤에 줄 바꿈 추가
-  }
-
-  console.log("=== rowRestrictGrid ===");
-  for (let y = 0; y < 8; y++) {
-    console.log(rowRestrictGrid[y].map((v) => (v ? " 1 " : " 0 ")).join(" "));
-    console.log("");
-  }
-
-  console.log("\n=== colRestrictGrid ===");
-  for (let y = 0; y < 8; y++) {
-    console.log(colRestrictGrid[y].map((v) => (v ? " 1 " : " 0 ")).join(" "));
-    console.log("");
   }
 };
